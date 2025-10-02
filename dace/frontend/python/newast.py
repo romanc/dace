@@ -1993,8 +1993,18 @@ class ProgramVisitor(ExtNodeVisitor):
                     # Create a code->code node
                     new_scalar = self.sdfg.temp_data_name()
                     if isinstance(internal_node, nodes.NestedSDFG):
-                        dtype = internal_node.sdfg.arrays[conn].dtype
-                    else:
+                        dtype = None
+                        if conn in internal_node.sdfg.arrays:
+                            dtype = internal_node.sdfg.arrays[conn].dtype
+                        else:
+                            # unsued arguments e.g. `weigth = 1.0`
+                            if isinstance(tasklet.code, nodes.CodeBlock) and len(tasklet.code.code) == 1 and isinstance(tasklet.code.code[0], ast.Assign):
+                                assignment: ast.Assign = tasklet.code.code[0]
+                                if len(assignment.targets) == 1 and assignment.targets[0].id == conn and isinstance(assignment.value, ast.Constant):
+                                    dtype = dtypes.typeclass(type(tasklet.code.code[0].value.value))
+                                    internal_node.sdfg.add_scalar(conn, dtype)
+                    
+                    if dtype is None:
                         raise SyntaxError('Cannot determine connector type for tasklet input dependency')
                     self.sdfg.add_scalar(new_scalar, dtype, transient=True)
                     accessnode = state.add_access(new_scalar)
