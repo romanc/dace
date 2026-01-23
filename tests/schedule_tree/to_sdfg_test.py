@@ -367,7 +367,7 @@ def test_create_if_else():
             ])
         ])
 
-    sdfg = stree.as_sdfg()
+    sdfg = stree.as_sdfg(simplify=False)
 
     blocks = list(filter(lambda x: isinstance(x, ConditionalBlock), sdfg.cfg_list))
     assert len(blocks) == 1, "SDFG contains one ConditionalBlock"

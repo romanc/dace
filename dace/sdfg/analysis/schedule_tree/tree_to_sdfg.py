@@ -5,7 +5,7 @@ from dace import symbolic
 from dace.memlet import Memlet
 from dace.sdfg import nodes, memlet_utils as mmu
 from dace.sdfg.sdfg import SDFG, ControlFlowRegion, InterstateEdge
-from dace.sdfg.state import SDFGState
+from dace.sdfg.state import ConditionalBlock, ControlFlowBlock, SDFGState
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg import propagation
 from enum import Enum, auto
@@ -232,23 +232,24 @@ class StreeToSDFG(tn.ScheduleNodeVisitor):
     def visit_IfScope(self, node: tn.IfScope, sdfg: SDFG) -> None:
         before_state = self._current_state
 
-        # add guard state
-        guard_state = _insert_and_split_assignments(sdfg,
-                                                    before_state,
-                                                    label="guard_state",
-                                                    assignments=self._pending_interstate_assignments())
+        conditional_block = ConditionalBlock(f"if_scope_{id(node)}")
+        sdfg.add_node(conditional_block)
+        _insert_and_split_assignments(sdfg, before_state, conditional_block, assignments=self._pending_interstate_assignments())
 
-        # add true_state
-        true_state = sdfg.add_state(label="true_state")
-        sdfg.add_edge(guard_state, true_state, InterstateEdge(condition=node.condition))
-        self._current_state = true_state
+        if_body = ControlFlowRegion("if_body", sdfg=sdfg)
+        conditional_block.add_branch(node.condition, if_body)
 
-        # visit children in the true branch
+        if_state = if_body.add_state("if_state", is_start_block=True)
+        self._current_state = if_state
+
+        # visit children of that branch
         self.visit(node.children, sdfg=sdfg)
+
+        self._current_state = conditional_block
 
         # add merge_state
         merge_state = _insert_and_split_assignments(sdfg,
-                                                    self._current_state,
+                                                    conditional_block,
                                                     label="merge_state",
                                                     assignments=self._pending_interstate_assignments())
 
@@ -261,14 +262,9 @@ class StreeToSDFG(tn.ScheduleNodeVisitor):
         if has_else_branch:
             # push merge_state on the stack for later usage in `visit_ElseScope`
             self._state_stack.append(merge_state)
-            false_state = sdfg.add_state(label="false_state")
-
-            sdfg.add_edge(guard_state, false_state, InterstateEdge(condition=f"not {node.condition.as_string}"))
-
-            # push false_state on the stack for later usage in `visit_ElseScope`
-            self._state_stack.append(false_state)
+            # push condition_block on the stack for later usage in `visit_ElseScope`
+            self._state_stack.append(conditional_block)
         else:
-            sdfg.add_edge(guard_state, merge_state, InterstateEdge(condition=f"not {node.condition.as_string}"))
             self._current_state = merge_state
 
     def visit_StateIfScope(self, node: tn.StateIfScope, sdfg: SDFG) -> None:
@@ -288,9 +284,14 @@ class StreeToSDFG(tn.ScheduleNodeVisitor):
         raise NotImplementedError(f"{type(node)} not implemented")
 
     def visit_ElseScope(self, node: tn.ElseScope, sdfg: SDFG) -> None:
-        # get false_state form stack
-        false_state = self._pop_state("false_state")
-        self._current_state = false_state
+        # get ConditionalBlock form stack
+        conditional_block: ConditionalBlock = self._pop_state("if_scope")
+
+        else_body = ControlFlowRegion("else_body", sdfg=sdfg)
+        conditional_block.add_branch(None, else_body)
+
+        else_state = else_body.add_state("else_state", is_start_block=True)
+        self._current_state = else_state
 
         # visit children inside the else branch
         self.visit(node.children, sdfg=sdfg)
@@ -298,7 +299,7 @@ class StreeToSDFG(tn.ScheduleNodeVisitor):
         # merge false-branch into merge_state
         merge_state = self._pop_state("merge_state")
         _insert_and_split_assignments(sdfg,
-                                      before_state=self._current_state,
+                                      before_state=conditional_block,
                                       after_state=merge_state,
                                       assignments=self._pending_interstate_assignments())
         self._current_state = merge_state
@@ -971,10 +972,11 @@ def create_state_boundary(boundary_node: tn.StateBoundaryNode,
 
 
 def _insert_and_split_assignments(sdfg_region: ControlFlowRegion,
-                                  before_state: SDFGState,
-                                  after_state: Optional[SDFGState] = None,
+                                  before_state: ControlFlowBlock,
+                                  after_state: Optional[ControlFlowBlock] = None,
+                                  *,
                                   label: Optional[str] = None,
-                                  assignments: Optional[Dict] = None) -> SDFGState:
+                                  assignments: Optional[Dict] = None) -> ControlFlowBlock:
     """
     Insert given assignments splitting them in case of potential race conditions.
 
