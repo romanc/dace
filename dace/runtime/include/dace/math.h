@@ -254,7 +254,7 @@ static DACE_CONSTEXPR DACE_HDFI std::complex<double> np_float_pow(const std::com
 // Computes Python modulus (also NumPy remainder)
 // Formula: num - (num // den) * den
 // NOTE: This is different than Python math.remainder and C remainder,
-// which are equaivalent to the IEEE remainder: num - round(num / den) * den
+// which are equivalent to the IEEE remainder: num - round(num / den) * den
 template<typename T>
 static DACE_CONSTEXPR DACE_HDFI T py_mod(const T& numerator, const T& denominator) {
     T quotient = py_floor(numerator, denominator);
@@ -392,10 +392,10 @@ static DACE_CONSTEXPR DACE_HDFI std::complex<T> reciprocal(const std::complex<T>
 
 #if __cplusplus < 201703L
 
-// Compute the greates common divisor of two integers
+// Compute the greatest common divisor of two integers
 template<typename T>
 static DACE_CONSTEXPR DACE_HDFI T gcd(T a, T b) {
-    // Modern Euclidian algorithm
+    // Modern Euclidean algorithm
     // (Knuth, Art of Computer Programming - Vol. 2 Seminumerical Algorithms)
     while (b != 0) {
         auto t = b;
@@ -417,7 +417,7 @@ static DACE_CONSTEXPR DACE_HDFI T lcm(T a, T b) {
 
 #else
 
-// Compute the greates common divisor of two integers
+// Compute the greatest common divisor of two integers
 template<typename T>
 static DACE_CONSTEXPR DACE_HDFI T gcd(const T& a, const T& b) {
     return std::gcd(a, b);
