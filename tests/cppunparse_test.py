@@ -1,22 +1,15 @@
 # Copyright 2019-2021 ETH Zurich and the DaCe authors. All rights reserved.
 from dace.codegen import cppunparse
-import six
 
 
 def _test_py2cpp(func, expected_string):
     result = cppunparse.py2cpp(func)
-    if result != expected_string:
-        print("ERROR in py2cpp, expected:\n%s\n\ngot:\n%s\n" % (expected_string, result))
-        return False
-    return True
+    assert result == expected_string
 
 
 def _test_pyexpr2cpp(func, expected_string):
     result = cppunparse.pyexpr2cpp(func)
-    if result != expected_string:
-        print("ERROR in pyexpr2cpp, expected:\n%s\n\ngot:\n%s\n" % (expected_string, result))
-        return False
-    return True
+    assert result == expected_string
 
 
 def gfunc(woo):
@@ -29,11 +22,7 @@ def gfunc(woo):
 
 
 def test():
-    print('cppunparse unit test')
-    success = True
-
-    success &= _test_py2cpp(
-        """def notype(a, b):
+    _test_py2cpp("""def notype(a, b):
     a = a + 5
     c = a + b
     return c*b
@@ -43,8 +32,7 @@ def test():
     return (c * b);
 }""")
 
-    if six.PY3:
-        success &= _test_py2cpp("""def typed(a: int, b: float) -> float:
+    _test_py2cpp("""def typed(a: int, b: float) -> float:
     c = a + b
     return c*b
 """, """float typed(int a, float b) {
@@ -53,10 +41,10 @@ def test():
 }""")
 
     # Ternary operators, strings
-    success &= _test_py2cpp("""printf('%f\\n', a if b else c);""", """printf("%f\\n", (b ? a : c));""")
+    _test_py2cpp("""printf('%f\\n', a if b else c);""", """printf("%f\\n", (b ? a : c));""")
 
     # Global functions, operators
-    success &= _test_py2cpp(
+    _test_py2cpp(
         gfunc, """auto gfunc(auto woo) {
     auto i = 0;
     auto result = 0;
@@ -72,13 +60,13 @@ def test():
         exit(1 >> 3)
 
     # Local functions
-    success &= _test_py2cpp(lfunc, """auto lfunc() {
+    _test_py2cpp(lfunc, """auto lfunc() {
     exit((1 >> 3));
 }""")
 
     # void return value
     if six.PY3:
-        success &= _test_py2cpp("""
+        _test_py2cpp("""
 def lfunc() -> None:
     exit(1 >> 3)
 """, """void lfunc() {
@@ -86,41 +74,44 @@ def lfunc() -> None:
 }""")
 
     # Local variable tracking
-    success &= _test_py2cpp('l = 1 + a; l = l + 8;', """auto l = (1 + a);
+    _test_py2cpp('l = 1 + a; l = l + 8;', """auto l = (1 + a);
 l = (l + 8);""")
 
     # Operations (augmented assignment)
-    if six.PY3:
-        success &= _test_py2cpp('l *= 3; l //= 8', """l *= 3;
+    _test_py2cpp('l *= 3; l //= 8', """l *= 3;
 l = dace::math::ifloor(l / 8);""")
 
-    success &= _test_pyexpr2cpp('a << 3', '(a << 3)')
+    _test_pyexpr2cpp('a << 3', '(a << 3)')
 
     # Array assignment
-    success &= _test_py2cpp('A[i] = b[j]', """A[i] = b[j];""")
+    _test_py2cpp('A[i] = b[j]', """A[i] = b[j];""")
 
     # Named constants
-    success &= _test_py2cpp('''if x is not None:
+    _test_py2cpp('''if x is not None:
     y = True if x else False
     ''', '''if ((x != nullptr)) {
     auto y = (x ? true : false);
 }''')
 
-    print('Result: %s' % ('PASSED' if success else 'FAILED'))
-    assert success
-
 
 def test_annotated_definition():
-    success = _test_py2cpp('''a: dace.float32
+    _test_py2cpp('''a: dace.float32
 if something:
     a = 5
     ''', '''dace::float32 a;
 if (something) {
     a = 5;
 }''')
+
+
+def test_integer_power() -> None:
+    python = "tmp: dace.float32\ntmp_2 = tmp ** 2"
+    expected = "dace::float32 tmp;\nauto tmp_2 = (dace::math::ipow(tmp, 2));"
+    success = _test_py2cpp(python, expected)
     assert success
 
 
 if __name__ == "__main__":
     test()
     test_annotated_definition()
+    test_integer_power()

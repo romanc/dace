@@ -26,6 +26,24 @@ def test_decorator_syntax():
     myprint(input, 10, 10)
 
 
+def test_integer_power():
+
+    @dace.program
+    def myprint(A):
+
+        @dace.tasklet("Python")
+        def myprint():
+            a << A[0]
+            out >> A[0]
+            """tmp: dace.float32\ntmp = a ** 0\nout = tmp"""
+
+    input = dace.ndarray((10, ), dtype=dace.float32)
+    input[:] = np.full(shape=(10, ), fill_value=42.0, dtype=np.float32)  # np.random.rand(10).astype(dace.float32.type)
+
+    myprint(A=input)
+    assert input == input
+
+
 def test_invalid_array_access():
 
     @dace.program

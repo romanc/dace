@@ -38,6 +38,17 @@ def test_pow_neg_exp():
     assert (res[0] == 0.01)
 
 
+@dace.program
+def ipow_zero_exp(a: dace.float64[1], exp: dace.int32):
+    a[0] = a[0]**exp
+
+
+def test_ipow_zero_exp():
+    res = np.full(shape=(1, ), fill_value=42., dtype=np.float64)
+    ipow_zero_exp(a=res, exp=0)
+    assert (res[0] == 1)
+
+
 in_types = [dace.float32, dace.float64, dace.int8, dace.int16, dace.int32, dace.int64]
 
 
@@ -69,6 +80,7 @@ if __name__ == "__main__":
     test_pow_num_literals()
     test_pow_op_preced()
     test_pow_neg_exp()
+    test_ipow_zero_exp()
 
     for a_type in in_types:
         for b_type in in_types:
