@@ -9,8 +9,8 @@ import inspect
 import itertools
 import warnings
 import sympy
-from typing import (TYPE_CHECKING, Any, AnyStr, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type,
-                    Union, overload)
+from typing import (TYPE_CHECKING, Any, AnyStr, Callable, Dict, Iterable, Iterator, List, Literal, Optional, Set, Tuple,
+                    Type, Union, overload)
 
 import dace
 from dace.frontend.python import astutils
@@ -1641,14 +1641,19 @@ class SDFGState(OrderedMultiDiConnectorGraph[nd.Node, mm.Memlet], ControlFlowBlo
         debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
         return self.add_access(array_or_stream_name, debuginfo=debuginfo)
 
-    def add_access(self, array_or_stream_name: str, debuginfo: Optional[dtypes.DebugInfo] = None) -> nd.AccessNode:
+    def add_access(
+        self,
+        array_or_stream_name: str,
+        debuginfo: dtypes.DebugInfo | None | Literal["auto"] = "auto",
+    ) -> nd.AccessNode:
         """ Adds an access node to this SDFG state.
 
             :param array_or_stream_name: The name of the array/stream.
-            :param debuginfo: Source line information for this access node.
+            :param debuginfo: Optional source line information for this access node. In case of "auto", infer it from the callstack.
             :return: An array access node.
         """
-        debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
+        if debuginfo == "auto":
+            debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
         node = nd.AccessNode(array_or_stream_name, debuginfo=debuginfo)
         self.add_node(node)
         return node
