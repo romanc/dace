@@ -1641,14 +1641,22 @@ class SDFGState(OrderedMultiDiConnectorGraph[nd.Node, mm.Memlet], ControlFlowBlo
         debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
         return self.add_access(array_or_stream_name, debuginfo=debuginfo)
 
-    def add_access(self, array_or_stream_name: str, debuginfo: Optional[dtypes.DebugInfo] = None) -> nd.AccessNode:
+    def add_access(
+        self,
+        array_or_stream_name: str,
+        debuginfo: Optional[dtypes.DebugInfo] = None,
+        *,
+        infer_debuginfo: bool = True,
+    ) -> nd.AccessNode:
         """ Adds an access node to this SDFG state.
 
             :param array_or_stream_name: The name of the array/stream.
             :param debuginfo: Source line information for this access node.
+            :param infer_debuginfo: If true and debuginfo is None, infer debuginfo from callstack.
             :return: An array access node.
         """
-        debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
+        if debuginfo is None and infer_debuginfo:
+            debuginfo = _getdebuginfo(debuginfo or self._default_lineinfo)
         node = nd.AccessNode(array_or_stream_name, debuginfo=debuginfo)
         self.add_node(node)
         return node
