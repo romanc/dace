@@ -466,11 +466,12 @@ class Memlet(object):
         """
         repl_to_intermediate = {}
         repl_to_final = {}
-        for symbol in repl_dict:
-            if str(symbol) != str(repl_dict[symbol]):
-                intermediate = symbolic.symbol('__dacesym_' + str(symbol))
-                repl_to_intermediate[symbolic.symbol(symbol)] = intermediate
-                repl_to_final[intermediate] = repl_dict[symbol]
+        for old, new in repl_dict.items():
+            old_name = str(old)  # support dict[str, symbol] and dict[symbol, symbol]
+            if old_name != str(new):
+                intermediate = symbolic.symbol(f'__dacesym_{old_name}')
+                repl_to_intermediate[symbolic.symbol(old_name)] = intermediate
+                repl_to_final[intermediate] = new
 
         if len(repl_to_intermediate) > 0:
             if self.volume is not None and symbolic.issymbolic(self.volume):
