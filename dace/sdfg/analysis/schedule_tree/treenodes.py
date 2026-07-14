@@ -376,7 +376,7 @@ class AssignNode(ScheduleTreeNode):
 
     def input_memlets(self, root: ScheduleTreeRoot | None = None, **kwargs) -> MemletSet:
         root = root if root is not None else self.get_root()
-        return MemletSet(self.edge.get_read_memlets(root.containers))
+        return MemletSet(self.edge.get_read_memlets(root.containers, include_scalars=True))
 
     def output_memlets(self, root: ScheduleTreeRoot | None = None, **kwargs) -> MemletSet:
         return MemletSet()
