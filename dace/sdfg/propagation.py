@@ -1591,7 +1591,6 @@ def propagate_memlet(dfg_state,
     else:
         raise TypeError('Trying to propagate through a non-scope node')
 
-    assert entry_node is not None
     sdfg = dfg_state.parent
     scope_node_symbols = set(conn for conn in entry_node.in_connectors if not conn.startswith('IN_'))
     defined_vars = [

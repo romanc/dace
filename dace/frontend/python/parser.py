@@ -11,11 +11,10 @@ from typing import get_origin, get_args
 import warnings
 
 from dace import data, dtypes, hooks, symbolic
-from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.config import Config
-from dace.data import create_datadescriptor, Data
 from dace.frontend.python import (newast, common as pycommon, cached_program, preprocessing)
 from dace.sdfg import SDFG, utils as sdutils
+from dace.data import create_datadescriptor, Data
 
 if TYPE_CHECKING:
     from dace.codegen.compiled_sdfg import CompiledSDFG

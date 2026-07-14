@@ -23,7 +23,6 @@ class StateBoundaryBehavior(Enum):
 
 PREFIX_PASSTHROUGH_IN: Final[str] = "IN_"
 PREFIX_PASSTHROUGH_OUT: Final[str] = "OUT_"
-PREFIX_SINK_TASKLET: Final[str] = "__stree_sink_tasklet"
 
 
 @dataclass
