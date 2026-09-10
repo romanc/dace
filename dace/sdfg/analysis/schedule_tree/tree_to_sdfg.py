@@ -810,21 +810,39 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         raise NotImplementedError(f"Support for {type(node)} not yet implemented.")
 
     def visit_ViewNode(self, node: tn.ViewNode, sdfg: SDFG) -> None:
-        # both, source and target nodes may or may not exist in this scope
-        access_cache = self._get_access_cache()
-        source_read = self._access_read(access_cache, node.source)
+        # Dev note:
+        # node.source denotes the data descriptor that the view is viewing
+        # node.target is the data descriptor of the view
+        # All the information of how to build the edge between node.source and node.target
+        # is in node.memelet._edge. That edge defines whether we have a read (source -> target)
+        # or a write (target -> source).
 
-        # TODO (later)
+        # Both, source and target nodes may or may not exist in this scope
+        access_cache = self._get_access_cache()
+        source_access = self._access_read(access_cache, node.source)
+
+        # TODO (later and for both source & target)
         # read access inside nested SDFG (i.e. when node.source not in current_sdfg.arrays)
 
         # only re-use write only nodes
         if node.target not in access_cache or self._current_state.out_degree(access_cache[node.target]) > 0:
-            target_access_node = self._current_state.add_write(node.target)
-            access_cache[node.target] = target_access_node
-        target_write = access_cache[node.target]
+            access_cache[node.target] = self._current_state.add_write(node.target)
+        target_access = access_cache[node.target]
 
-        # finally add memlet between source and target
-        self._current_state.add_memlet_path(source_read, target_write, memlet=node.memlet)
+        # finally add edge between source and target
+        if node.memlet._edge.src.data == node.source:
+            src = source_access
+            dst = target_access
+        else:
+            src = target_access
+            dst = source_access
+        self._current_state.add_edge(
+            src,
+            node.memlet._edge.src_conn,
+            dst,
+            node.memlet._edge.dst_conn,
+            node.memlet,
+        )
 
     def visit_NView(self, node: tn.NView, sdfg: SDFG) -> None:
         # Basic working principle:
