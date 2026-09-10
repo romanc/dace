@@ -689,10 +689,7 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         tasklet = node.node
         self._current_state.add_node(tasklet)
 
-        cache_key = (self._current_state, id(self._ctx.current_scope))
-        if cache_key not in self._ctx.access_cache:
-            self._ctx.access_cache[cache_key] = {}
-        cache = self._ctx.access_cache[cache_key]
+        cache = self._get_access_cache()
         scope_node, to_connect = self._dataflow_stack[-1] if self._dataflow_stack else (None, None)
 
         # Connect input memlets
@@ -791,19 +788,11 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         raise NotImplementedError(f"Support for {type(node)} not yet implemented.")
 
     def visit_CopyNode(self, node: tn.CopyNode, sdfg: SDFG) -> None:
-        # ensure we have an access_cache and fetch it
-        cache_key = (self._current_state, id(self._ctx.current_scope))
-        if cache_key not in self._ctx.access_cache:
-            self._ctx.access_cache[cache_key] = {}
-        access_cache = self._ctx.access_cache[cache_key]
+        access_cache = self._get_access_cache()
 
         # both, source and target nodes, may or may not exist (in this state)
         src_name = node.memlet.data
-        if src_name not in access_cache:
-            # cache new read access
-            source_access_node = self._current_state.add_read(src_name)
-            access_cache[src_name] = source_access_node
-        source = access_cache[src_name]
+        source = self._access_read(access_cache, src_name)
 
         target_name = node.target
         # only re-use cached write-only nodes, e.g. don't create a cycle for
@@ -821,7 +810,21 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         raise NotImplementedError(f"Support for {type(node)} not yet implemented.")
 
     def visit_ViewNode(self, node: tn.ViewNode, sdfg: SDFG) -> None:
-        raise NotImplementedError(f"Support for {type(node)} not yet implemented.")
+        # both, source and target nodes may or may not exist in this scope
+        access_cache = self._get_access_cache()
+        source_read = self._access_read(access_cache, node.source)
+
+        # TODO (later)
+        # read access inside nested SDFG (i.e. when node.source not in current_sdfg.arrays)
+
+        # only re-use write only nodes
+        if node.target not in access_cache or self._current_state.out_degree(access_cache[node.target]) > 0:
+            target_access_node = self._current_state.add_write(node.target)
+            access_cache[node.target] = target_access_node
+        target_write = access_cache[node.target]
+
+        # finally add memlet between source and target
+        self._current_state.add_memlet_path(source_read, target_write, memlet=node.memlet)
 
     def visit_NView(self, node: tn.NView, sdfg: SDFG) -> None:
         # Basic working principle:
@@ -876,6 +879,24 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         self._interstate_symbols.clear()
 
         return assignments
+
+    def _get_access_cache(self) -> dict[str, nodes.AccessNode]:
+        "Ensure we have an access_cache and fetch it."
+        cache_key = (self._current_state, id(self._ctx.current_scope))
+        if cache_key not in self._ctx.access_cache:
+            self._ctx.access_cache[cache_key] = {}
+
+        return self._ctx.access_cache[cache_key]
+
+    def _access_read(self, access_cache: dict[str, nodes.AccessNode], name: str) -> nodes.AccessNode:
+        if name in access_cache:
+            # Return cached access if found
+            return access_cache[name]
+
+        # Setup a new read access and add it to the cache
+        source_access_node = self._current_state.add_read(name)
+        access_cache[name] = source_access_node
+        return source_access_node
 
 
 def from_schedule_tree(

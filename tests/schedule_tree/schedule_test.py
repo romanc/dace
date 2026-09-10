@@ -281,6 +281,9 @@ def test_multiview():
     stree = as_schedule_tree(sdfg)
     assert [type(n) for n in stree.children] == [tn.ViewNode, tn.ViewNode, tn.ViewNode, tn.ViewNode, tn.CopyNode]
 
+    sdfg = stree.as_sdfg(validate=False, simplify=False)
+    assert sdfg.is_valid()
+
 
 if __name__ == '__main__':
     test_for_in_map_in_for()
