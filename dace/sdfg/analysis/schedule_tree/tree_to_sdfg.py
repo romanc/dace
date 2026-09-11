@@ -763,7 +763,7 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
 
             if isinstance(scope_node, SDFG):
                 if memlet.data not in sdfg.arrays:
-                    parent_sdfg: SDFG = self._parent_sdfg_with_array(memlet.data, sdfg)
+                    parent_sdfg = self._parent_sdfg_with_array(memlet.data, sdfg)
 
                     # Support for NView nodes
                     use_nview = self._apply_nview_array_override(memlet.data, sdfg)
@@ -819,25 +819,60 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
 
         # Both, source and target nodes may or may not exist in this scope
         access_cache = self._get_access_cache()
-        if node.source not in access_cache:
-            access_cache[node.source] = self._current_state.add_read(node.source)
-        source_access = access_cache[node.source]
+        scope_node, to_connect = self._dataflow_stack[-1] if self._dataflow_stack else (None, None)
 
-        # TODO (later and for both source & target)
-        # read access inside nested SDFG (i.e. when node.source not in current_sdfg.arrays)
+        source_node: nodes.Node | None = None
+        target_node: nodes.Node | None = None
+
+        if node.source in access_cache:
+            # Check for local access
+            source_node = access_cache[node.source]
+        else:
+            # If not, we can have two cases
+            # 1. We are inside a Map -> connect to the map entry node
+            # 2. We are inside a nested SDFG -> copy data descriptor from parent SDFG and add connector
+
+            if isinstance(scope_node, nodes.MapEntry):
+                connector_name = f"{PREFIX_PASSTHROUGH_OUT}{node.source}"
+                if connector_name not in scope_node.out_connectors:
+                    new_in_connector = scope_node.add_in_connector(f"{PREFIX_PASSTHROUGH_IN}{node.source}")
+                    new_out_connector = scope_node.add_out_connector(connector_name)
+                    assert new_in_connector == True
+                    assert new_out_connector == True
+                source_node = scope_node
+            elif isinstance(scope_node, SDFG):
+                # Copy data descriptor from parent (if not already known)
+                if node.source not in sdfg.arrays:
+                    parent_sdfg = self._parent_sdfg_with_array(node.source, sdfg)
+                    # TODO: NView node support? not, right? Right?!
+                    sdfg.add_datadesc(node.source, parent_sdfg.arrays[node.source].clone())
+                    # Transients passed into a nested SDFG become non-transient inside that nested SDFG
+                    if parent_sdfg.arrays[node.source].transient:
+                        sdfg.arrays[node.source].transient = False
+                    to_connect["inputs"].add(node.source)
+
+                # Add in_connector in case of read after (partial) write of "outside data"
+                if node.source in self._known_data_outside_nestedSDFG:
+                    to_connect["inputs"].add(node.source)
+
+                # Create a new node and cache the local access
+                source_node = self._current_state.add_read(node.source)
+                access_cache[node.source] = source_node
+            else:
+                raise NotImplementedError("TODO: can we ever end up here?")
 
         # only re-use write only nodes
         if node.target not in access_cache or self._current_state.out_degree(access_cache[node.target]) > 0:
             access_cache[node.target] = self._current_state.add_write(node.target)
-        target_access = access_cache[node.target]
+        target_node = access_cache[node.target]
 
         # Finally add edge by looking at the memlet's edge data to figure out the direction
         if node.memlet._edge.src.data == node.source:
-            edge_src = source_access
-            edge_dst = target_access
+            edge_src = source_node
+            edge_dst = target_node
         else:
-            edge_src = target_access
-            edge_dst = source_access
+            edge_src = target_node
+            edge_dst = source_node
         self._current_state.add_edge(
             edge_src,
             node.memlet._edge.src_conn,
@@ -845,6 +880,22 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
             node.memlet._edge.dst_conn,
             node.memlet,
         )
+
+        if isinstance(scope_node, nodes.MapEntry):
+            to_connect[node.target] = (target_node, copy.deepcopy(node.memlet))
+        elif isinstance(scope_node, SDFG):
+            parent_sdfg = self._parent_sdfg_with_array(node.target, sdfg)
+            # TODO: NView node support? not, right? Right?!
+            sdfg.add_datadesc(node.target, parent_sdfg.arrays[node.target].clone())
+            # Transients passed into a nested SDFG become non-transient inside that nested SDFG
+            if parent_sdfg.arrays[node.target].transient:
+                sdfg.arrays[node.target].transient = False
+
+            # Add out connector in any case because we don't know who (if anyone)
+            # is gonna read from it down the line.
+            to_connect["outputs"].add(node.target)
+        else:
+            assert scope_node is None
 
     def visit_NView(self, node: tn.NView, sdfg: SDFG) -> None:
         # Basic working principle:
