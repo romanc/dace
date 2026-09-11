@@ -859,7 +859,7 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
                 source_node = self._current_state.add_read(node.source)
                 access_cache[node.source] = source_node
             else:
-                raise NotImplementedError("TODO: can we ever end up here?")
+                assert scope_node is None
 
         # only re-use write only nodes
         if node.target not in access_cache or self._current_state.out_degree(access_cache[node.target]) > 0:
@@ -867,7 +867,7 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         target_node = access_cache[node.target]
 
         # Finally add edge by looking at the memlet's edge data to figure out the direction
-        if node.memlet._edge.src.data == node.source:
+        if node.memlet._edge.data.data == node.source:
             edge_src = source_node
             edge_dst = target_node
         else:
