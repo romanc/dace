@@ -814,12 +814,14 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
         # node.source denotes the data descriptor that the view is viewing
         # node.target is the data descriptor of the view
         # All the information of how to build the edge between node.source and node.target
-        # is in node.memelet._edge. That edge defines whether we have a read (source -> target)
+        # is in node.memlet._edge. That edge defines whether we have a read (source -> target)
         # or a write (target -> source).
 
         # Both, source and target nodes may or may not exist in this scope
         access_cache = self._get_access_cache()
-        source_access = self._access_read(access_cache, node.source)
+        if node.source not in access_cache:
+            access_cache[node.source] = self._current_state.add_read(node.source)
+        source_access = access_cache[node.source]
 
         # TODO (later and for both source & target)
         # read access inside nested SDFG (i.e. when node.source not in current_sdfg.arrays)
@@ -829,17 +831,17 @@ class _StreeToSDFG(tn.ScheduleNodeVisitor):
             access_cache[node.target] = self._current_state.add_write(node.target)
         target_access = access_cache[node.target]
 
-        # finally add edge between source and target
+        # Finally add edge by looking at the memlet's edge data to figure out the direction
         if node.memlet._edge.src.data == node.source:
-            src = source_access
-            dst = target_access
+            edge_src = source_access
+            edge_dst = target_access
         else:
-            src = target_access
-            dst = source_access
+            edge_src = target_access
+            edge_dst = source_access
         self._current_state.add_edge(
-            src,
+            edge_src,
             node.memlet._edge.src_conn,
-            dst,
+            edge_dst,
             node.memlet._edge.dst_conn,
             node.memlet,
         )
